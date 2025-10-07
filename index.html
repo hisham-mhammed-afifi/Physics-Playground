@@ -1,32 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <title>Physics Playground - Matter.js</title>
+    <meta charset="utf-8" />
+    <title>Physics Playground — Limited Tries</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
       body {
         background: #eef;
         margin: 0;
         overflow: hidden;
-        font-family: sans-serif;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial;
         display: flex;
         flex-direction: column;
         align-items: center;
+        gap: 8px;
+        padding: 8px;
       }
       #controls {
-        margin: 10px;
         display: flex;
         flex-wrap: wrap;
+        gap: 8px;
         align-items: center;
-        gap: 10px;
+      }
+      label {
+        user-select: none;
       }
       canvas {
         background: #cde;
         border: 1px solid #888;
         touch-action: none;
+        max-width: 100%;
+        height: auto;
       }
-      label {
-        user-select: none;
+      button {
+        padding: 6px 10px;
+      }
+      .stat {
+        margin-left: 8px;
+        font-weight: 600;
+      }
+      #gameOverMsg {
+        position: absolute;
+        top: 45%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        padding: 16px 24px;
+        border-radius: 8px;
+        font-size: 1.2em;
+        display: none;
       }
     </style>
   </head>
@@ -40,16 +64,18 @@
       /></label>
       <button id="launchBtn">Launch</button>
       <button id="resetBtn">Reset</button>
-      <span id="scoreDisplay">Score: 0</span>
-      <span id="highScoreDisplay">High Score: 0</span>
+      <span id="scoreDisplay" class="stat">Score: 0</span>
+      <span id="triesDisplay" class="stat">Tries Left: 0</span>
+      <span id="highScoreDisplay" class="stat">High Score: 0</span>
     </div>
+
     <canvas id="game" width="800" height="600"></canvas>
+    <div id="gameOverMsg">Game Over!<br /><small>Resetting...</small></div>
 
     <script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
     <script>
       const { Engine, Runner, Bodies, Body, Composite, Events } = Matter;
 
-      // --- Canvas & Engine setup ---
       const canvas = document.getElementById("game");
       const ctx = canvas.getContext("2d");
       const engine = Engine.create();
@@ -57,37 +83,40 @@
       const runner = Runner.create();
       Runner.run(runner, engine);
 
-      // --- World bounds ---
+      const VELOCITY_SCALE = 0.5;
       const ground = Bodies.rectangle(400, 590, 800, 20, { isStatic: true });
       const leftWall = Bodies.rectangle(0, 300, 20, 600, { isStatic: true });
       const rightWall = Bodies.rectangle(800, 300, 20, 600, { isStatic: true });
       Composite.add(world, [ground, leftWall, rightWall]);
 
-      // --- Controls ---
+      // UI refs
       const angleSlider = document.getElementById("angle");
       const powerSlider = document.getElementById("power");
       const launchBtn = document.getElementById("launchBtn");
       const resetBtn = document.getElementById("resetBtn");
       const scoreDisplay = document.getElementById("scoreDisplay");
+      const triesDisplay = document.getElementById("triesDisplay");
       const highScoreDisplay = document.getElementById("highScoreDisplay");
+      const gameOverMsg = document.getElementById("gameOverMsg");
 
-      // --- Game variables ---
+      // Game state
       let score = 0;
       let highScore = parseInt(
         localStorage.getItem("physicsPlaygroundHighScore") || "0"
       );
-      highScoreDisplay.textContent = `High Score: ${highScore}`;
       let projectile = null;
       let launched = false;
+      let triesLeft = 0;
       const launcherPos = { x: 100, y: 550 };
 
-      // --- Targets ---
+      highScoreDisplay.textContent = `High Score: ${highScore}`;
+
+      // Targets & obstacles
       const targets = [
         Bodies.circle(600, 540, 20, { isStatic: true, label: "target" }),
         Bodies.circle(650, 480, 20, { isStatic: true, label: "target" }),
         Bodies.circle(700, 420, 20, { isStatic: true, label: "target" }),
       ];
-      // --- Obstacles (Advanced Feature) ---
       const obstacles = [
         Bodies.rectangle(400, 530, 100, 20, {
           isStatic: true,
@@ -100,11 +129,65 @@
         }),
       ];
       Composite.add(world, [...targets, ...obstacles]);
+      triesLeft = targets.length - 1;
+      triesDisplay.textContent = `Tries Left: ${triesLeft}`;
 
-      // --- Launch ---
-      function launch(angleDeg, power) {
+      // Predictive path data
+      let predictedPath = [];
+      function updatePredictedPath() {
         if (launched) return;
+        const angle = parseFloat(angleSlider.value);
+        const power = parseFloat(powerSlider.value);
+        predictedPath = computePredictedPath(angle, power);
+      }
+
+      // Predicted path simulation
+      function computePredictedPath(angleDeg, power) {
+        const tempEngine = Engine.create();
+        tempEngine.gravity.y = engine.gravity.y;
+        const tempBall = Bodies.circle(launcherPos.x, launcherPos.y, 12, {
+          restitution: 0.6,
+          frictionAir: 0.01,
+        });
+        Composite.add(tempEngine.world, tempBall);
+
+        const angle = (angleDeg * Math.PI) / 180;
+        const v0 = power * VELOCITY_SCALE;
+        Body.setVelocity(tempBall, {
+          x: v0 * Math.cos(angle),
+          y: -v0 * Math.sin(angle),
+        });
+
+        const pts = [];
+        for (let i = 0; i < 300; i++) {
+          Engine.update(tempEngine, 1000 / 60);
+          pts.push({ x: tempBall.position.x, y: tempBall.position.y });
+          if (tempBall.position.y > 620 || tempBall.position.x > 820) break;
+        }
+        Composite.clear(tempEngine.world, false);
+        return pts;
+      }
+
+      function drawPredictedPath() {
+        if (!predictedPath.length) return;
+        ctx.beginPath();
+        predictedPath.forEach((p, i) =>
+          i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)
+        );
+        ctx.strokeStyle = "rgba(0,0,0,0.45)";
+        ctx.setLineDash([6, 6]);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Launch logic with tries
+      function launch(angleDeg, power) {
+        if (launched || triesLeft <= 0) return;
         launched = true;
+        triesLeft--;
+        triesDisplay.textContent = `Tries Left: ${triesLeft}`;
+
         const angle = (angleDeg * Math.PI) / 180;
         projectile = Bodies.circle(launcherPos.x, launcherPos.y, 12, {
           restitution: 0.6,
@@ -112,18 +195,46 @@
           label: "projectile",
         });
         Composite.add(world, projectile);
-        const v0 = power * 0.5;
+        const v0 = power * VELOCITY_SCALE;
         Body.setVelocity(projectile, {
           x: v0 * Math.cos(angle),
           y: -v0 * Math.sin(angle),
         });
+        predictedPath = [];
+
+        // auto-reset if projectile rests or out of bounds
+        monitorProjectile();
       }
 
-      launchBtn.onclick = () => {
-        launch(parseFloat(angleSlider.value), parseFloat(powerSlider.value));
-      };
+      function monitorProjectile() {
+        const interval = setInterval(() => {
+          if (!projectile) {
+            clearInterval(interval);
+            return;
+          }
+          const v = projectile.velocity;
+          const speed = Math.hypot(v.x, v.y);
+          const y = projectile.position.y;
+          if (speed < 0.2 || y > 580) {
+            Composite.remove(world, projectile);
+            projectile = null;
+            launched = false;
+            updatePredictedPath();
+            clearInterval(interval);
+            if (triesLeft <= 0) endRound();
+          }
+        }, 500);
+      }
 
-      resetBtn.onclick = resetGame;
+      function endRound() {
+        gameOverMsg.style.display = "block";
+        if (score > highScore) {
+          highScore = score;
+          localStorage.setItem("physicsPlaygroundHighScore", highScore);
+          highScoreDisplay.textContent = `High Score: ${highScore}`;
+        }
+        setTimeout(resetGame, 2500);
+      }
 
       function resetGame() {
         Composite.clear(world, false);
@@ -134,117 +245,77 @@
           ...targets,
           ...obstacles,
         ]);
-        projectile = null;
-        launched = false;
         score = 0;
+        triesLeft = targets.length - 1;
+        launched = false;
+        projectile = null;
         scoreDisplay.textContent = "Score: 0";
+        triesDisplay.textContent = `Tries Left: ${triesLeft}`;
+        gameOverMsg.style.display = "none";
+        updatePredictedPath();
       }
 
-      // --- Collision scoring ---
+      // UI events
+      angleSlider.addEventListener("input", updatePredictedPath);
+      powerSlider.addEventListener("input", updatePredictedPath);
+      launchBtn.onclick = () =>
+        launch(parseFloat(angleSlider.value), parseFloat(powerSlider.value));
+      resetBtn.onclick = resetGame;
+
+      // Scoring
       Events.on(engine, "collisionStart", (e) => {
         e.pairs.forEach((pair) => {
-          const labels = [pair.bodyA.label, pair.bodyB.label];
-          if (labels.includes("projectile") && labels.includes("target")) {
-            const hitTarget = labels[0] === "target" ? pair.bodyA : pair.bodyB;
-            Composite.remove(world, hitTarget);
-            score += 1;
-            if (score > highScore) {
-              highScore = score;
-              localStorage.setItem("physicsPlaygroundHighScore", highScore);
-            }
+          const a = pair.bodyA,
+            b = pair.bodyB;
+          if (
+            (a.label === "projectile" && b.label === "target") ||
+            (b.label === "projectile" && a.label === "target")
+          ) {
+            const target = a.label === "target" ? a : b;
+            Composite.remove(world, target);
+            score++;
             scoreDisplay.textContent = `Score: ${score}`;
-            highScoreDisplay.textContent = `High Score: ${highScore}`;
           }
         });
       });
 
-      // --- Predicted trajectory ---
-      function drawPredictedPath(angleDeg, power) {
-        const angle = (angleDeg * Math.PI) / 180;
-        const v0 = power * 0.5;
-        const g = engine.gravity.y * 60;
-        const pts = [];
-        for (let t = 0; t < 2; t += 0.05) {
-          const x = launcherPos.x + v0 * Math.cos(angle) * t * 30;
-          const y =
-            launcherPos.y -
-            (v0 * Math.sin(angle) * t * 30 - 0.5 * g * t * t * 30);
-          if (y > 600) break;
-          pts.push({ x, y });
-        }
-        ctx.beginPath();
-        pts.forEach((p, i) => {
-          if (i === 0) ctx.moveTo(p.x, p.y);
-          else ctx.lineTo(p.x, p.y);
-        });
-        ctx.strokeStyle = "rgba(0,0,0,0.4)";
-        ctx.setLineDash([5, 5]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-      // --- Draw loop ---
+      // Render
       function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (!launched) drawPredictedPath();
 
-        // Predicted trajectory when not launched
-        if (!launched) {
-          drawPredictedPath(
-            parseFloat(angleSlider.value),
-            parseFloat(powerSlider.value)
-          );
-        }
-
-        // Launcher guide
         ctx.fillStyle = "#444";
         ctx.fillRect(launcherPos.x - 10, launcherPos.y, 20, 20);
 
-        // Draw bodies
         const bodies = Composite.allBodies(world);
         ctx.beginPath();
-        bodies.forEach((body) => {
-          const vertices = body.vertices;
-          ctx.moveTo(vertices[0].x, vertices[0].y);
-          for (let j = 1; j < vertices.length; j++)
-            ctx.lineTo(vertices[j].x, vertices[j].y);
-          ctx.lineTo(vertices[0].x, vertices[0].y);
+        bodies.forEach((b) => {
+          const v = b.vertices;
+          ctx.moveTo(v[0].x, v[0].y);
+          for (let i = 1; i < v.length; i++) ctx.lineTo(v[i].x, v[i].y);
+          ctx.lineTo(v[0].x, v[0].y);
         });
         ctx.lineWidth = 1;
         ctx.strokeStyle = "#000";
         ctx.stroke();
 
+        if (projectile) {
+          ctx.beginPath();
+          ctx.arc(
+            projectile.position.x,
+            projectile.position.y,
+            projectile.circleRadius || 12,
+            0,
+            Math.PI * 2
+          );
+          ctx.fillStyle = "#a22";
+          ctx.fill();
+        }
         requestAnimationFrame(draw);
       }
       draw();
 
-      // --- Mobile touch controls ---
-      let touchStart = null;
-      canvas.addEventListener("touchstart", (e) => {
-        if (launched) return;
-        const t = e.touches[0];
-        touchStart = { x: t.clientX, y: t.clientY };
-      });
-      canvas.addEventListener("touchmove", (e) => {
-        if (!touchStart || launched) return;
-        const t = e.touches[0];
-        const dx = touchStart.x - t.clientX;
-        const dy = touchStart.y - t.clientY;
-        const angle = Math.min(
-          80,
-          Math.max(10, (Math.atan2(dy, dx) * 180) / Math.PI)
-        );
-        const power = Math.min(
-          100,
-          Math.max(10, Math.sqrt(dx * dx + dy * dy) / 5)
-        );
-        angleSlider.value = angle;
-        powerSlider.value = power;
-      });
-      canvas.addEventListener("touchend", (e) => {
-        if (launched) return;
-        launch(parseFloat(angleSlider.value), parseFloat(powerSlider.value));
-        touchStart = null;
-      });
+      updatePredictedPath();
     </script>
   </body>
 </html>
