@@ -71,7 +71,7 @@
       Runner.run(runner, engine);
 
       const launcherPos = { x: 100, y: 550 },
-        VELOCITY_SCALE = 0.5;
+        VELOCITY_SCALE = 0.25; // reduced for better control
       const ground = Bodies.rectangle(400, 590, 800, 20, { isStatic: true });
       const walls = [
         Bodies.rectangle(0, 300, 20, 600, { isStatic: true }),
@@ -79,7 +79,6 @@
       ];
       Composite.add(world, [ground, ...walls]);
 
-      // UI
       const resetBtn = document.getElementById("resetBtn");
       const levelDisplay = document.getElementById("levelDisplay");
       const scoreDisplay = document.getElementById("scoreDisplay");
@@ -87,7 +86,6 @@
       const highScoreDisplay = document.getElementById("highScoreDisplay");
       const overlay = document.getElementById("overlay");
 
-      // Sounds
       function playSound(f, t = "sine", d = 0.2, v = 0.2) {
         const ac = new (window.AudioContext || window.webkitAudioContext)();
         const o = ac.createOscillator(),
@@ -101,7 +99,6 @@
         o.stop(ac.currentTime + d);
       }
 
-      // State
       let level = 1,
         score = 0,
         highScore = parseInt(
@@ -117,18 +114,15 @@
         clouds = [];
       highScoreDisplay.textContent = `High Score: ${highScore}`;
 
-      // Load cloud image
       const cloudImg = new Image();
       cloudImg.src = "assets/cloud.png";
 
-      // Background colors per level
       const BG_COLORS = [
         { sky: "#bce0ff", ground: "#7bc96f" },
         { sky: "#ffe6b3", ground: "#c49d56" },
         { sky: "#ffc6d1", ground: "#c06c84" },
       ];
 
-      // Create cloud layers
       function initClouds() {
         clouds = [];
         for (let i = 0; i < 8; i++) {
@@ -142,7 +136,6 @@
         }
       }
 
-      // Levels
       const LEVELS = [
         {
           targets: [
@@ -179,7 +172,6 @@
         },
       ];
 
-      // Build level
       function buildLevel(n) {
         Composite.clear(world, false);
         Composite.add(world, [ground, ...walls]);
@@ -209,7 +201,6 @@
         updatePredictedPath();
       }
 
-      // Predictive path
       function computePredictedPath(aDeg, power) {
         const temp = Engine.create();
         temp.gravity.y = engine.gravity.y;
@@ -245,7 +236,6 @@
         ctx.setLineDash([]);
       }
 
-      // Launch logic
       function launch(aDeg, power) {
         if (launched || triesLeft <= 0) return;
         launched = true;
@@ -285,7 +275,6 @@
         }, 500);
       }
 
-      // Particles
       function spawnExplosion(x, y, color = "#f22") {
         for (let i = 0; i < 18; i++) {
           particles.push({
@@ -318,7 +307,6 @@
         });
       }
 
-      // Level / Game flow
       function checkEndConditions() {
         const remaining = Composite.allBodies(world).filter(
           (b) => b.label === "target"
@@ -412,10 +400,9 @@
           80,
           Math.max(10, (Math.atan2(dy, dx) * 180) / Math.PI)
         );
-        dragPower = Math.min(
-          100,
-          Math.max(10, Math.sqrt(dx * dx + dy * dy) / 3)
-        );
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        // power curve: smoother response, limits exaggerated power
+        dragPower = Math.min(100, Math.pow(dist / 4, 0.85));
         updatePredictedPath(dragAngle, dragPower);
       });
       canvas.addEventListener("mouseup", () => {
@@ -424,7 +411,6 @@
         launch(dragAngle, dragPower);
       });
 
-      // Background + render
       function drawBackground() {
         const colors = BG_COLORS[(level - 1) % BG_COLORS.length];
         const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -432,8 +418,6 @@
         grad.addColorStop(1, colors.ground);
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // clouds from image
         clouds.forEach((c) => {
           if (cloudImg.complete) {
             ctx.globalAlpha = c.layer === 1 ? 0.9 : 0.6;
@@ -450,7 +434,6 @@
         if (!launched && !isDragging) drawPredictedPath();
         ctx.fillStyle = "#444";
         ctx.fillRect(launcherPos.x - 10, launcherPos.y, 20, 20);
-
         if (isDragging) {
           ctx.beginPath();
           ctx.moveTo(launcherPos.x, launcherPos.y);
@@ -468,7 +451,6 @@
           ctx.strokeStyle = "rgba(0,0,0,0.2)";
           ctx.stroke();
         }
-
         const bodies = Composite.allBodies(world);
         ctx.beginPath();
         bodies.forEach((b) => {
