@@ -193,7 +193,7 @@
           )
         );
         Composite.add(world, [...targets, ...obstacles]);
-        triesLeft = targets.length - 1;
+        triesLeft = targets.length;
         triesDisplay.textContent = `Tries Left: ${triesLeft}`;
         levelDisplay.textContent = `Level: ${level}`;
         launched = false;
