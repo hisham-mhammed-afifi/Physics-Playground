@@ -1,111 +1,126 @@
-# 🎯 Physics Playground (Matter.js)
+# 🎯 Physics Playground — Matter.js Projectile Motion Game
 
-An interactive **projectile motion game** inspired by _Angry Birds_, built with **HTML5 Canvas** and **Matter.js**.  
-Players adjust the **angle** and **power** to launch a ball toward static targets.  
-Includes realistic physics, obstacles, scoring, and high-score persistence.
-
----
-
-## 🧠 Concept
-
-This project demonstrates:
-
-- Physics simulation with [Matter.js](https://brm.io/matter-js/)
-- Canvas-based rendering & animation
-- User interaction via sliders and touch gestures
-- Projectile motion with gravity
-- Collision detection & scoring system
-- Clean and maintainable vanilla JavaScript structure
+An interactive physics-based web game built with **Matter.js** and **HTML5 Canvas**.  
+Inspired by classic projectile motion challenges, this demo lets players **drag, aim, and launch** a ball to hit multiple targets using real-world physics.
 
 ---
 
 ## 🚀 Live Demo
 
-> [🔗 (Add your GitHub Pages / Netlify / Vercel link here)](https://example.com)
+👉 [Play on GitHub Pages](https://hisham-mhammed-afifi.github.io/Physics-Playground/)
 
 ---
 
-## 🧩 Features Implemented
+## 🧩 Features
 
-| Category                     | Feature                                                                   | Points |
-| ---------------------------- | ------------------------------------------------------------------------- | ------ |
-| **Core Requirements**        | Launch mechanism (angle + power), 3 static targets, scoring, hit feedback | ✅ 1   |
-| **Trajectory Visualization** | Predicted dotted path before launch                                       | ✅ 1   |
-| **Advanced Feature**         | Static obstacles/barriers                                                 | ✅ 2   |
-| **Code Quality & Polish**    | Clean single-file structure, 60fps rendering, simple UI                   | ✅ 1   |
-| **Bonus Features**           | High-score persistence (`localStorage`), Mobile touch controls            | ✅ +1  |
-
-**Total Attempted:** 6 / 5 points
-
----
-
-## 🎮 Controls
-
-### Desktop
-
-- **Angle slider:** Adjust launch angle (10°–80°)
-- **Power slider:** Adjust launch power (10–100)
-- **Launch button:** Fire projectile
-- **Reset button:** Restart level
-
-### Mobile / Touch
-
-- **Drag back** from launcher to aim
-- **Longer drag = more power**
-- **Release** to launch
+| Category                      | Description                                                                             |
+| ----------------------------- | --------------------------------------------------------------------------------------- |
+| ⚙️ **Physics Engine**         | Powered by [Matter.js](https://brm.io/matter-js/) with realistic gravity and collisions |
+| 🖱️ **Intuitive Controls**     | Click and drag to set **angle and power** visually                                      |
+| 🎯 **Projectile Trajectory**  | Predicted path before launch + dynamic path simulation                                  |
+| 🧱 **Levels & Obstacles**     | Three levels with unique obstacles and target layouts                                   |
+| 💥 **Feedback & FX**          | Particle explosions and sound effects for hits and level clears                         |
+| ☁️ **Dynamic Backgrounds**    | Animated clouds, sky gradients, and parallax effects                                    |
+| 🏆 **Scoring & High Score**   | Automatic scoring and persistence using `localStorage`                                  |
+| 🔁 **Limited Tries**          | Launch attempts per level equal to (targets - 1)                                        |
+| 🕹️ **Auto Level Progression** | Win transitions and “You Win” finale screen                                             |
+| 💻 **Responsive Canvas**      | Scales smoothly on most screen sizes                                                    |
 
 ---
 
-## 🧱 Gameplay Elements
+## 📂 Project Structure
 
-| Element            | Description                                 |
-| ------------------ | ------------------------------------------- |
-| **Projectile**     | Ball launched from left bottom corner       |
-| **Targets**        | 3 static circles to hit for points          |
-| **Obstacles**      | 2 fixed barriers blocking direct shots      |
-| **Ground & Walls** | Static boundaries preventing escape         |
-| **Scoring**        | +1 per target destroyed                     |
-| **High Score**     | Saved locally in browser via `localStorage` |
+```
 
----
+physics-playground/
+│
+├── index.html          # Main single-file Matter.js game
+├── assets/
+│   └── cloud.png       # Cloud image for parallax background
+└── README.md
 
-## 🛠️ Technologies Used
-
-- **HTML5 Canvas** for rendering
-- **Matter.js** for physics and collisions
-- **Vanilla JavaScript (ES6)** for logic and UI
-- **localStorage API** for persistent high score
+```
 
 ---
 
-## ⚙️ Setup & Run
+## 🧠 Core Concepts Demonstrated
 
-1. Clone or download the repository
+- Canvas drawing, layers, and animation loops (`requestAnimationFrame`)
+- Realistic projectile motion with gravity
+- Collision detection (targets and obstacles)
+- Parabolic motion & trajectory prediction
+- Sound generation using Web Audio API
+- Procedural particle effects
+- Clean, modular JS game architecture
+- Local persistence via `localStorage`
 
-   ```bash
-   git clone https://github.com/yourusername/physics-playground.git
-   cd physics-playground
-   ```
+---
 
-2. Open `index.html` directly in any browser
-   _(no build or server needed)_
+## 🕹️ How to Play
 
-   Optional: serve locally
+1. **Drag** anywhere on the screen to set **angle and power**.
+2. **Release** to launch the projectile.
+3. Try to **hit all targets** before you run out of launches.
+4. Advance through all levels to **win the game!**
 
-   ```bash
-   npx serve .
-   ```
+---
+
+## ⚡ Setup Instructions
+
+### Option 1: Run Locally
+
+```bash
+# Clone the repo
+git clone https://github.com/hisham-mhammed-afifi/Physics-Playground.git
+cd physics-playground
+
+# Open in browser
+open index.html
+```
+
+### Option 2: Deploy to GitHub Pages
+
+1. Push this repository to GitHub.
+2. Go to **Settings → Pages → Deploy from Branch → main branch**.
+3. Wait a minute, then open your live link.
+
+---
+
+## 🧮 Technical Highlights
+
+- Uses **Matter.Engine** for physics simulation
+- **requestAnimationFrame** loop for 60fps rendering
+- Smooth power scaling curve for intuitive control
+- **Sound FX** generated dynamically (no external assets)
+- Fully encapsulated in **one HTML + JS file** (for learning clarity)
+
+---
+
+## 🧱 Built With
+
+- [Matter.js](https://brm.io/matter-js/) — Physics Engine
+- **HTML5 Canvas** — Rendering
+- **JavaScript (ES6)** — Game Logic
+- **Web Audio API** — Sound Effects
 
 ---
 
 ## 🧑‍💻 Author
 
 **Hesham Afifi**
-Frontend Developer | Game Physics Enthusiast
-[GitHub Profile](https://github.com/yourusername)
+Senior Frontend Developer | Angular & Game Dev Enthusiast
+🌐 [LinkedIn](https://www.linkedin.com/in/hisham-abd-elshafouk/) • [GitHub](https://github.com/hisham-mhammed-afifi)
 
 ---
 
-## 🪄 License
+## 🏁 License
 
-MIT License © 2025 Hesham Afifi
+This project is released under the [MIT License](LICENSE).
+
+---
+
+### 🌟 If you like this project
+
+Give it a ⭐ on GitHub and share it with others learning **Matter.js** or **Canvas Game Development**!
+
+---
