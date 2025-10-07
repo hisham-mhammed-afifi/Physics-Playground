@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Physics Playground - Matter.js</title>
+    <style>
+      body {
+        background: #eef;
+        margin: 0;
+        overflow: hidden;
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      #controls {
+        margin: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+      canvas {
+        background: #cde;
+        border: 1px solid #888;
+        touch-action: none;
+      }
+      label {
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controls">
+      <label
+        >Angle: <input id="angle" type="range" min="10" max="80" value="45"
+      /></label>
+      <label
+        >Power: <input id="power" type="range" min="10" max="100" value="50"
+      /></label>
+      <button id="launchBtn">Launch</button>
+      <button id="resetBtn">Reset</button>
+      <span id="scoreDisplay">Score: 0</span>
+      <span id="highScoreDisplay">High Score: 0</span>
+    </div>
+    <canvas id="game" width="800" height="600"></canvas>
+
+    <script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
+    <script>
+      const { Engine, Runner, Bodies, Body, Composite, Events } = Matter;
+
+      // --- Canvas & Engine setup ---
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const engine = Engine.create();
+      const world = engine.world;
+      const runner = Runner.create();
+      Runner.run(runner, engine);
+
+      // --- World bounds ---
+      const ground = Bodies.rectangle(400, 590, 800, 20, { isStatic: true });
+      const leftWall = Bodies.rectangle(0, 300, 20, 600, { isStatic: true });
+      const rightWall = Bodies.rectangle(800, 300, 20, 600, { isStatic: true });
+      Composite.add(world, [ground, leftWall, rightWall]);
+
+      // --- Controls ---
+      const angleSlider = document.getElementById("angle");
+      const powerSlider = document.getElementById("power");
+      const launchBtn = document.getElementById("launchBtn");
+      const resetBtn = document.getElementById("resetBtn");
+      const scoreDisplay = document.getElementById("scoreDisplay");
+      const highScoreDisplay = document.getElementById("highScoreDisplay");
+
+      // --- Game variables ---
+      let score = 0;
+      let highScore = parseInt(
+        localStorage.getItem("physicsPlaygroundHighScore") || "0"
+      );
+      highScoreDisplay.textContent = `High Score: ${highScore}`;
+      let projectile = null;
+      let launched = false;
+      const launcherPos = { x: 100, y: 550 };
+
+      // --- Targets ---
+      const targets = [
+        Bodies.circle(600, 540, 20, { isStatic: true, label: "target" }),
+        Bodies.circle(650, 480, 20, { isStatic: true, label: "target" }),
+        Bodies.circle(700, 420, 20, { isStatic: true, label: "target" }),
+      ];
+      // --- Obstacles (Advanced Feature) ---
+      const obstacles = [
+        Bodies.rectangle(400, 530, 100, 20, {
+          isStatic: true,
+          label: "obstacle",
+        }),
+        Bodies.rectangle(500, 460, 120, 20, {
+          isStatic: true,
+          label: "obstacle",
+          angle: Math.PI / 8,
+        }),
+      ];
+      Composite.add(world, [...targets, ...obstacles]);
+
+      // --- Launch ---
+      function launch(angleDeg, power) {
+        if (launched) return;
+        launched = true;
+        const angle = (angleDeg * Math.PI) / 180;
+        projectile = Bodies.circle(launcherPos.x, launcherPos.y, 12, {
+          restitution: 0.6,
+          frictionAir: 0.01,
+          label: "projectile",
+        });
+        Composite.add(world, projectile);
+        const v0 = power * 0.5;
+        Body.setVelocity(projectile, {
+          x: v0 * Math.cos(angle),
+          y: -v0 * Math.sin(angle),
+        });
+      }
+
+      launchBtn.onclick = () => {
+        launch(parseFloat(angleSlider.value), parseFloat(powerSlider.value));
+      };
+
+      resetBtn.onclick = resetGame;
+
+      function resetGame() {
+        Composite.clear(world, false);
+        Composite.add(world, [
+          ground,
+          leftWall,
+          rightWall,
+          ...targets,
+          ...obstacles,
+        ]);
+        projectile = null;
+        launched = false;
+        score = 0;
+        scoreDisplay.textContent = "Score: 0";
+      }
+
+      // --- Collision scoring ---
+      Events.on(engine, "collisionStart", (e) => {
+        e.pairs.forEach((pair) => {
+          const labels = [pair.bodyA.label, pair.bodyB.label];
+          if (labels.includes("projectile") && labels.includes("target")) {
+            const hitTarget = labels[0] === "target" ? pair.bodyA : pair.bodyB;
+            Composite.remove(world, hitTarget);
+            score += 1;
+            if (score > highScore) {
+              highScore = score;
+              localStorage.setItem("physicsPlaygroundHighScore", highScore);
+            }
+            scoreDisplay.textContent = `Score: ${score}`;
+            highScoreDisplay.textContent = `High Score: ${highScore}`;
+          }
+        });
+      });
+
+      // --- Predicted trajectory ---
+      function drawPredictedPath(angleDeg, power) {
+        const angle = (angleDeg * Math.PI) / 180;
+        const v0 = power * 0.5;
+        const g = engine.gravity.y * 60;
+        const pts = [];
+        for (let t = 0; t < 2; t += 0.05) {
+          const x = launcherPos.x + v0 * Math.cos(angle) * t * 30;
+          const y =
+            launcherPos.y -
+            (v0 * Math.sin(angle) * t * 30 - 0.5 * g * t * t * 30);
+          if (y > 600) break;
+          pts.push({ x, y });
+        }
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
+        ctx.strokeStyle = "rgba(0,0,0,0.4)";
+        ctx.setLineDash([5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // --- Draw loop ---
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Predicted trajectory when not launched
+        if (!launched) {
+          drawPredictedPath(
+            parseFloat(angleSlider.value),
+            parseFloat(powerSlider.value)
+          );
+        }
+
+        // Launcher guide
+        ctx.fillStyle = "#444";
+        ctx.fillRect(launcherPos.x - 10, launcherPos.y, 20, 20);
+
+        // Draw bodies
+        const bodies = Composite.allBodies(world);
+        ctx.beginPath();
+        bodies.forEach((body) => {
+          const vertices = body.vertices;
+          ctx.moveTo(vertices[0].x, vertices[0].y);
+          for (let j = 1; j < vertices.length; j++)
+            ctx.lineTo(vertices[j].x, vertices[j].y);
+          ctx.lineTo(vertices[0].x, vertices[0].y);
+        });
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#000";
+        ctx.stroke();
+
+        requestAnimationFrame(draw);
+      }
+      draw();
+
+      // --- Mobile touch controls ---
+      let touchStart = null;
+      canvas.addEventListener("touchstart", (e) => {
+        if (launched) return;
+        const t = e.touches[0];
+        touchStart = { x: t.clientX, y: t.clientY };
+      });
+      canvas.addEventListener("touchmove", (e) => {
+        if (!touchStart || launched) return;
+        const t = e.touches[0];
+        const dx = touchStart.x - t.clientX;
+        const dy = touchStart.y - t.clientY;
+        const angle = Math.min(
+          80,
+          Math.max(10, (Math.atan2(dy, dx) * 180) / Math.PI)
+        );
+        const power = Math.min(
+          100,
+          Math.max(10, Math.sqrt(dx * dx + dy * dy) / 5)
+        );
+        angleSlider.value = angle;
+        powerSlider.value = power;
+      });
+      canvas.addEventListener("touchend", (e) => {
+        if (launched) return;
+        launch(parseFloat(angleSlider.value), parseFloat(powerSlider.value));
+        touchStart = null;
+      });
+    </script>
+  </body>
+</html>
