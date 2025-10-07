@@ -2,15 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Physics Playground — Limited Tries</title>
+    <title>Physics Playground — Level Progression</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
       body {
         background: #eef;
         margin: 0;
         overflow: hidden;
-        font-family: system-ui, -apple-system, "Segoe UI", Roboto,
-          "Helvetica Neue", Arial;
+        font-family: system-ui, sans-serif;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -40,7 +39,7 @@
         margin-left: 8px;
         font-weight: 600;
       }
-      #gameOverMsg {
+      #overlay {
         position: absolute;
         top: 45%;
         left: 50%;
@@ -51,6 +50,7 @@
         border-radius: 8px;
         font-size: 1.2em;
         display: none;
+        text-align: center;
       }
     </style>
   </head>
@@ -64,18 +64,18 @@
       /></label>
       <button id="launchBtn">Launch</button>
       <button id="resetBtn">Reset</button>
+      <span id="levelDisplay" class="stat">Level: 1</span>
       <span id="scoreDisplay" class="stat">Score: 0</span>
       <span id="triesDisplay" class="stat">Tries Left: 0</span>
       <span id="highScoreDisplay" class="stat">High Score: 0</span>
     </div>
 
     <canvas id="game" width="800" height="600"></canvas>
-    <div id="gameOverMsg">Game Over!<br /><small>Resetting...</small></div>
+    <div id="overlay"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
     <script>
       const { Engine, Runner, Bodies, Body, Composite, Events } = Matter;
-
       const canvas = document.getElementById("game");
       const ctx = canvas.getContext("2d");
       const engine = Engine.create();
@@ -84,22 +84,27 @@
       Runner.run(runner, engine);
 
       const VELOCITY_SCALE = 0.5;
+      const launcherPos = { x: 100, y: 550 };
+
+      // Base world (ground & walls)
       const ground = Bodies.rectangle(400, 590, 800, 20, { isStatic: true });
       const leftWall = Bodies.rectangle(0, 300, 20, 600, { isStatic: true });
       const rightWall = Bodies.rectangle(800, 300, 20, 600, { isStatic: true });
       Composite.add(world, [ground, leftWall, rightWall]);
 
-      // UI refs
+      // UI elements
       const angleSlider = document.getElementById("angle");
       const powerSlider = document.getElementById("power");
       const launchBtn = document.getElementById("launchBtn");
       const resetBtn = document.getElementById("resetBtn");
+      const levelDisplay = document.getElementById("levelDisplay");
       const scoreDisplay = document.getElementById("scoreDisplay");
       const triesDisplay = document.getElementById("triesDisplay");
       const highScoreDisplay = document.getElementById("highScoreDisplay");
-      const gameOverMsg = document.getElementById("gameOverMsg");
+      const overlay = document.getElementById("overlay");
 
       // Game state
+      let level = 1;
       let score = 0;
       let highScore = parseInt(
         localStorage.getItem("physicsPlaygroundHighScore") || "0"
@@ -107,42 +112,87 @@
       let projectile = null;
       let launched = false;
       let triesLeft = 0;
-      const launcherPos = { x: 100, y: 550 };
-
+      let targets = [];
+      let obstacles = [];
       highScoreDisplay.textContent = `High Score: ${highScore}`;
 
-      // Targets & obstacles
-      const targets = [
-        Bodies.circle(600, 540, 20, { isStatic: true, label: "target" }),
-        Bodies.circle(650, 480, 20, { isStatic: true, label: "target" }),
-        Bodies.circle(700, 420, 20, { isStatic: true, label: "target" }),
+      // Level definitions
+      const LEVELS = [
+        {
+          targets: [
+            { x: 600, y: 540 },
+            { x: 650, y: 480 },
+            { x: 700, y: 420 },
+          ],
+          obstacles: [
+            { x: 400, y: 530, w: 100, h: 20, angle: 0 },
+            { x: 500, y: 460, w: 120, h: 20, angle: Math.PI / 8 },
+          ],
+        },
+        {
+          targets: [
+            { x: 600, y: 500 },
+            { x: 680, y: 450 },
+            { x: 730, y: 400 },
+          ],
+          obstacles: [
+            { x: 430, y: 520, w: 140, h: 20, angle: -Math.PI / 10 },
+            { x: 500, y: 470, w: 100, h: 20, angle: Math.PI / 6 },
+          ],
+        },
+        {
+          targets: [
+            { x: 650, y: 520 },
+            { x: 700, y: 460 },
+            { x: 750, y: 400 },
+          ],
+          obstacles: [
+            { x: 420, y: 530, w: 120, h: 20, angle: Math.PI / 8 },
+            { x: 550, y: 460, w: 150, h: 20, angle: -Math.PI / 8 },
+          ],
+        },
       ];
-      const obstacles = [
-        Bodies.rectangle(400, 530, 100, 20, {
-          isStatic: true,
-          label: "obstacle",
-        }),
-        Bodies.rectangle(500, 460, 120, 20, {
-          isStatic: true,
-          label: "obstacle",
-          angle: Math.PI / 8,
-        }),
-      ];
-      Composite.add(world, [...targets, ...obstacles]);
-      triesLeft = targets.length - 1;
-      triesDisplay.textContent = `Tries Left: ${triesLeft}`;
 
-      // Predictive path data
+      // --- GAME FUNCTIONS ---
+      function buildLevel(n) {
+        // clear existing world except boundaries
+        Composite.clear(world, false);
+        Composite.add(world, [ground, leftWall, rightWall]);
+        targets = [];
+        obstacles = [];
+        const def = LEVELS[(n - 1) % LEVELS.length];
+        def.targets.forEach((t) => {
+          targets.push(
+            Bodies.circle(t.x, t.y, 20, { isStatic: true, label: "target" })
+          );
+        });
+        def.obstacles.forEach((o) => {
+          obstacles.push(
+            Bodies.rectangle(o.x, o.y, o.w, o.h, {
+              isStatic: true,
+              angle: o.angle,
+              label: "obstacle",
+            })
+          );
+        });
+        Composite.add(world, [...targets, ...obstacles]);
+        triesLeft = targets.length - 1;
+        triesDisplay.textContent = `Tries Left: ${triesLeft}`;
+        levelDisplay.textContent = `Level: ${level}`;
+        launched = false;
+        projectile = null;
+        updatePredictedPath();
+      }
+
+      // Predictive path
       let predictedPath = [];
       function updatePredictedPath() {
         if (launched) return;
-        const angle = parseFloat(angleSlider.value);
-        const power = parseFloat(powerSlider.value);
-        predictedPath = computePredictedPath(angle, power);
+        const a = parseFloat(angleSlider.value);
+        const p = parseFloat(powerSlider.value);
+        predictedPath = computePredictedPath(a, p);
       }
-
-      // Predicted path simulation
-      function computePredictedPath(angleDeg, power) {
+      function computePredictedPath(aDeg, power) {
         const tempEngine = Engine.create();
         tempEngine.gravity.y = engine.gravity.y;
         const tempBall = Bodies.circle(launcherPos.x, launcherPos.y, 12, {
@@ -150,24 +200,20 @@
           frictionAir: 0.01,
         });
         Composite.add(tempEngine.world, tempBall);
-
-        const angle = (angleDeg * Math.PI) / 180;
+        const a = (aDeg * Math.PI) / 180;
         const v0 = power * VELOCITY_SCALE;
         Body.setVelocity(tempBall, {
-          x: v0 * Math.cos(angle),
-          y: -v0 * Math.sin(angle),
+          x: v0 * Math.cos(a),
+          y: -v0 * Math.sin(a),
         });
-
         const pts = [];
         for (let i = 0; i < 300; i++) {
           Engine.update(tempEngine, 1000 / 60);
           pts.push({ x: tempBall.position.x, y: tempBall.position.y });
           if (tempBall.position.y > 620 || tempBall.position.x > 820) break;
         }
-        Composite.clear(tempEngine.world, false);
         return pts;
       }
-
       function drawPredictedPath() {
         if (!predictedPath.length) return;
         ctx.beginPath();
@@ -176,19 +222,17 @@
         );
         ctx.strokeStyle = "rgba(0,0,0,0.45)";
         ctx.setLineDash([6, 6]);
-        ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.setLineDash([]);
       }
 
-      // Launch logic with tries
-      function launch(angleDeg, power) {
+      // Launch
+      function launch(aDeg, power) {
         if (launched || triesLeft <= 0) return;
         launched = true;
         triesLeft--;
         triesDisplay.textContent = `Tries Left: ${triesLeft}`;
-
-        const angle = (angleDeg * Math.PI) / 180;
+        const a = (aDeg * Math.PI) / 180;
         projectile = Bodies.circle(launcherPos.x, launcherPos.y, 12, {
           restitution: 0.6,
           frictionAir: 0.01,
@@ -197,65 +241,79 @@
         Composite.add(world, projectile);
         const v0 = power * VELOCITY_SCALE;
         Body.setVelocity(projectile, {
-          x: v0 * Math.cos(angle),
-          y: -v0 * Math.sin(angle),
+          x: v0 * Math.cos(a),
+          y: -v0 * Math.sin(a),
         });
         predictedPath = [];
-
-        // auto-reset if projectile rests or out of bounds
         monitorProjectile();
       }
 
       function monitorProjectile() {
-        const interval = setInterval(() => {
+        const check = setInterval(() => {
           if (!projectile) {
-            clearInterval(interval);
+            clearInterval(check);
             return;
           }
           const v = projectile.velocity;
           const speed = Math.hypot(v.x, v.y);
-          const y = projectile.position.y;
-          if (speed < 0.2 || y > 580) {
+          if (speed < 0.2 || projectile.position.y > 580) {
             Composite.remove(world, projectile);
             projectile = null;
             launched = false;
             updatePredictedPath();
-            clearInterval(interval);
-            if (triesLeft <= 0) endRound();
+            clearInterval(check);
+            checkEndConditions();
           }
         }, 500);
       }
 
-      function endRound() {
-        gameOverMsg.style.display = "block";
+      function checkEndConditions() {
+        // If all targets destroyed, next level
+        const remaining = Composite.allBodies(world).filter(
+          (b) => b.label === "target"
+        );
+        if (remaining.length === 0) {
+          nextLevel();
+          return;
+        }
+        // if out of tries, game over (restart from level 1)
+        if (triesLeft <= 0) {
+          overlay.innerHTML =
+            "Out of tries!<br><small>Restarting level...</small>";
+          overlay.style.display = "block";
+          setTimeout(() => {
+            overlay.style.display = "none";
+            buildLevel(level);
+          }, 2000);
+        }
+      }
+
+      function nextLevel() {
+        overlay.innerHTML = `Level ${level} Complete!<br><small>Loading next level...</small>`;
+        overlay.style.display = "block";
+        score += 3; // bonus for finishing
         if (score > highScore) {
           highScore = score;
           localStorage.setItem("physicsPlaygroundHighScore", highScore);
           highScoreDisplay.textContent = `High Score: ${highScore}`;
         }
-        setTimeout(resetGame, 2500);
+        scoreDisplay.textContent = `Score: ${score}`;
+        setTimeout(() => {
+          overlay.style.display = "none";
+          level++;
+          buildLevel(level);
+        }, 2000);
       }
 
       function resetGame() {
-        Composite.clear(world, false);
-        Composite.add(world, [
-          ground,
-          leftWall,
-          rightWall,
-          ...targets,
-          ...obstacles,
-        ]);
+        level = 1;
         score = 0;
-        triesLeft = targets.length - 1;
-        launched = false;
-        projectile = null;
-        scoreDisplay.textContent = "Score: 0";
-        triesDisplay.textContent = `Tries Left: ${triesLeft}`;
-        gameOverMsg.style.display = "none";
-        updatePredictedPath();
+        buildLevel(level);
+        scoreDisplay.textContent = `Score: ${score}`;
+        overlay.style.display = "none";
       }
 
-      // UI events
+      // UI
       angleSlider.addEventListener("input", updatePredictedPath);
       powerSlider.addEventListener("input", updatePredictedPath);
       launchBtn.onclick = () =>
@@ -264,9 +322,9 @@
 
       // Scoring
       Events.on(engine, "collisionStart", (e) => {
-        e.pairs.forEach((pair) => {
-          const a = pair.bodyA,
-            b = pair.bodyB;
+        e.pairs.forEach((p) => {
+          const a = p.bodyA,
+            b = p.bodyB;
           if (
             (a.label === "projectile" && b.label === "target") ||
             (b.label === "projectile" && a.label === "target")
@@ -279,26 +337,22 @@
         });
       });
 
-      // Render
+      // Draw loop
       function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (!launched) drawPredictedPath();
-
         ctx.fillStyle = "#444";
         ctx.fillRect(launcherPos.x - 10, launcherPos.y, 20, 20);
-
         const bodies = Composite.allBodies(world);
         ctx.beginPath();
         bodies.forEach((b) => {
           const v = b.vertices;
           ctx.moveTo(v[0].x, v[0].y);
-          for (let i = 1; i < v.length; i++) ctx.lineTo(v[i].x, v[i].y);
+          for (let j = 1; j < v.length; j++) ctx.lineTo(v[j].x, v[j].y);
           ctx.lineTo(v[0].x, v[0].y);
         });
-        ctx.lineWidth = 1;
         ctx.strokeStyle = "#000";
         ctx.stroke();
-
         if (projectile) {
           ctx.beginPath();
           ctx.arc(
@@ -313,9 +367,10 @@
         }
         requestAnimationFrame(draw);
       }
-      draw();
 
-      updatePredictedPath();
+      // Initialize
+      buildLevel(level);
+      draw();
     </script>
   </body>
 </html>
