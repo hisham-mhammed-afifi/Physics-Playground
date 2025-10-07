@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Physics Playground — Level Progression</title>
+    <title>Physics Playground — Complete Game</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
       body {
@@ -85,14 +85,11 @@
 
       const VELOCITY_SCALE = 0.5;
       const launcherPos = { x: 100, y: 550 };
-
-      // Base world (ground & walls)
       const ground = Bodies.rectangle(400, 590, 800, 20, { isStatic: true });
       const leftWall = Bodies.rectangle(0, 300, 20, 600, { isStatic: true });
       const rightWall = Bodies.rectangle(800, 300, 20, 600, { isStatic: true });
       Composite.add(world, [ground, leftWall, rightWall]);
 
-      // UI elements
       const angleSlider = document.getElementById("angle");
       const powerSlider = document.getElementById("power");
       const launchBtn = document.getElementById("launchBtn");
@@ -103,20 +100,35 @@
       const highScoreDisplay = document.getElementById("highScoreDisplay");
       const overlay = document.getElementById("overlay");
 
+      // Sounds (Web Audio API)
+      function playSound(freq, type = "sine", duration = 0.2, vol = 0.2) {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = freq;
+        osc.type = type;
+        gain.gain.value = vol;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      }
+
       // Game state
-      let level = 1;
-      let score = 0;
-      let highScore = parseInt(
-        localStorage.getItem("physicsPlaygroundHighScore") || "0"
-      );
-      let projectile = null;
-      let launched = false;
-      let triesLeft = 0;
-      let targets = [];
-      let obstacles = [];
+      let level = 1,
+        score = 0,
+        highScore = parseInt(
+          localStorage.getItem("physicsPlaygroundHighScore") || "0"
+        );
+      let projectile = null,
+        launched = false,
+        triesLeft = 0,
+        targets = [],
+        obstacles = [];
+      let particles = []; // for explosions
       highScoreDisplay.textContent = `High Score: ${highScore}`;
 
-      // Level definitions
+      // Levels
       const LEVELS = [
         {
           targets: [
@@ -153,28 +165,27 @@
         },
       ];
 
-      // --- GAME FUNCTIONS ---
+      // Build level
       function buildLevel(n) {
-        // clear existing world except boundaries
         Composite.clear(world, false);
         Composite.add(world, [ground, leftWall, rightWall]);
         targets = [];
         obstacles = [];
         const def = LEVELS[(n - 1) % LEVELS.length];
-        def.targets.forEach((t) => {
+        def.targets.forEach((t) =>
           targets.push(
             Bodies.circle(t.x, t.y, 20, { isStatic: true, label: "target" })
-          );
-        });
-        def.obstacles.forEach((o) => {
+          )
+        );
+        def.obstacles.forEach((o) =>
           obstacles.push(
             Bodies.rectangle(o.x, o.y, o.w, o.h, {
               isStatic: true,
               angle: o.angle,
               label: "obstacle",
             })
-          );
-        });
+          )
+        );
         Composite.add(world, [...targets, ...obstacles]);
         triesLeft = targets.length - 1;
         triesDisplay.textContent = `Tries Left: ${triesLeft}`;
@@ -193,24 +204,21 @@
         predictedPath = computePredictedPath(a, p);
       }
       function computePredictedPath(aDeg, power) {
-        const tempEngine = Engine.create();
-        tempEngine.gravity.y = engine.gravity.y;
-        const tempBall = Bodies.circle(launcherPos.x, launcherPos.y, 12, {
+        const temp = Engine.create();
+        temp.gravity.y = engine.gravity.y;
+        const ball = Bodies.circle(launcherPos.x, launcherPos.y, 12, {
           restitution: 0.6,
           frictionAir: 0.01,
         });
-        Composite.add(tempEngine.world, tempBall);
+        Composite.add(temp.world, ball);
         const a = (aDeg * Math.PI) / 180;
         const v0 = power * VELOCITY_SCALE;
-        Body.setVelocity(tempBall, {
-          x: v0 * Math.cos(a),
-          y: -v0 * Math.sin(a),
-        });
+        Body.setVelocity(ball, { x: v0 * Math.cos(a), y: -v0 * Math.sin(a) });
         const pts = [];
         for (let i = 0; i < 300; i++) {
-          Engine.update(tempEngine, 1000 / 60);
-          pts.push({ x: tempBall.position.x, y: tempBall.position.y });
-          if (tempBall.position.y > 620 || tempBall.position.x > 820) break;
+          Engine.update(temp, 1000 / 60);
+          pts.push({ x: ball.position.x, y: ball.position.y });
+          if (ball.position.y > 620 || ball.position.x > 820) break;
         }
         return pts;
       }
@@ -226,7 +234,7 @@
         ctx.setLineDash([]);
       }
 
-      // Launch
+      // Launch logic
       function launch(aDeg, power) {
         if (launched || triesLeft <= 0) return;
         launched = true;
@@ -245,13 +253,14 @@
           y: -v0 * Math.sin(a),
         });
         predictedPath = [];
+        playSound(220, "triangle", 0.2, 0.3); // launch sound
         monitorProjectile();
       }
 
       function monitorProjectile() {
-        const check = setInterval(() => {
+        const timer = setInterval(() => {
           if (!projectile) {
-            clearInterval(check);
+            clearInterval(timer);
             return;
           }
           const v = projectile.velocity;
@@ -261,22 +270,58 @@
             projectile = null;
             launched = false;
             updatePredictedPath();
-            clearInterval(check);
+            clearInterval(timer);
             checkEndConditions();
           }
         }, 500);
       }
 
+      // Particle system
+      function spawnExplosion(x, y, color = "#f22") {
+        for (let i = 0; i < 20; i++) {
+          particles.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 6,
+            vy: (Math.random() - 0.5) * 6,
+            life: 60,
+            color,
+          });
+        }
+      }
+      function updateParticles() {
+        particles.forEach((p) => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.15;
+          p.life--;
+        });
+        particles = particles.filter((p) => p.life > 0);
+      }
+      function drawParticles() {
+        particles.forEach((p) => {
+          ctx.globalAlpha = Math.max(0, p.life / 60);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+      }
+
+      // Level / Game flow
       function checkEndConditions() {
-        // If all targets destroyed, next level
         const remaining = Composite.allBodies(world).filter(
           (b) => b.label === "target"
         );
         if (remaining.length === 0) {
-          nextLevel();
+          if (level < LEVELS.length) {
+            nextLevel();
+          } else {
+            showWinScreen();
+          }
           return;
         }
-        // if out of tries, game over (restart from level 1)
         if (triesLeft <= 0) {
           overlay.innerHTML =
             "Out of tries!<br><small>Restarting level...</small>";
@@ -289,20 +334,31 @@
       }
 
       function nextLevel() {
-        overlay.innerHTML = `Level ${level} Complete!<br><small>Loading next level...</small>`;
+        overlay.innerHTML = `Level ${level} Complete!<br><small>Next level loading...</small>`;
         overlay.style.display = "block";
-        score += 3; // bonus for finishing
+        score += 3;
+        playSound(600, "sine", 0.3, 0.3);
         if (score > highScore) {
           highScore = score;
           localStorage.setItem("physicsPlaygroundHighScore", highScore);
-          highScoreDisplay.textContent = `High Score: ${highScore}`;
         }
         scoreDisplay.textContent = `Score: ${score}`;
+        highScoreDisplay.textContent = `High Score: ${highScore}`;
         setTimeout(() => {
           overlay.style.display = "none";
           level++;
           buildLevel(level);
         }, 2000);
+      }
+
+      function showWinScreen() {
+        overlay.innerHTML = `🎉 YOU WIN! 🎉<br>Final Score: ${score}<br><small>Restarting...</small>`;
+        overlay.style.display = "block";
+        playSound(880, "square", 0.5, 0.4);
+        setTimeout(() => {
+          overlay.style.display = "none";
+          resetGame();
+        }, 3500);
       }
 
       function resetGame() {
@@ -320,7 +376,7 @@
         launch(parseFloat(angleSlider.value), parseFloat(powerSlider.value));
       resetBtn.onclick = resetGame;
 
-      // Scoring
+      // Collisions and scoring
       Events.on(engine, "collisionStart", (e) => {
         e.pairs.forEach((p) => {
           const a = p.bodyA,
@@ -330,6 +386,8 @@
             (b.label === "projectile" && a.label === "target")
           ) {
             const target = a.label === "target" ? a : b;
+            spawnExplosion(target.position.x, target.position.y);
+            playSound(440, "square", 0.2, 0.3);
             Composite.remove(world, target);
             score++;
             scoreDisplay.textContent = `Score: ${score}`;
@@ -358,17 +416,19 @@
           ctx.arc(
             projectile.position.x,
             projectile.position.y,
-            projectile.circleRadius || 12,
+            12,
             0,
             Math.PI * 2
           );
           ctx.fillStyle = "#a22";
           ctx.fill();
         }
+        updateParticles();
+        drawParticles();
         requestAnimationFrame(draw);
       }
 
-      // Initialize
+      // Init
       buildLevel(level);
       draw();
     </script>
