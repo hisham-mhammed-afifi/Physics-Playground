@@ -1,0 +1,146 @@
+{
+  "levels": [
+    {
+      "id": 1,
+      "name": "Getting Started",
+      "targets": [
+        { "x": 600, "y": 540 },
+        { "x": 650, "y": 480 },
+        { "x": 700, "y": 420 }
+      ],
+      "obstacles": [
+        { "x": 400, "y": 530, "width": 100, "height": 20, "angle": 0 },
+        { "x": 500, "y": 460, "width": 120, "height": 20, "angle": 0.39269908169872414 }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Rising Challenge",
+      "targets": [
+        { "x": 600, "y": 500 },
+        { "x": 680, "y": 450 },
+        { "x": 730, "y": 400 }
+      ],
+      "obstacles": [
+        { "x": 430, "y": 520, "width": 140, "height": 20, "angle": -0.3141592653589793 },
+        { "x": 500, "y": 470, "width": 100, "height": 20, "angle": 0.5235987755982988 }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Expert Territory",
+      "targets": [
+        { "x": 650, "y": 520 },
+        { "x": 700, "y": 460 },
+        { "x": 750, "y": 400 }
+      ],
+      "obstacles": [
+        { "x": 420, "y": 530, "width": 120, "height": 20, "angle": 0.39269908169872414 },
+        { "x": 550, "y": 460, "width": 150, "height": 20, "angle": -0.39269908169872414 }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "The Tower",
+      "targets": [
+        { "x": 650, "y": 540 },
+        { "x": 650, "y": 480 },
+        { "x": 650, "y": 420 },
+        { "x": 650, "y": 360 }
+      ],
+      "obstacles": [
+        { "x": 450, "y": 540, "width": 120, "height": 20, "angle": 0 },
+        { "x": 500, "y": 450, "width": 100, "height": 20, "angle": 0.5235987755982988 }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Zigzag",
+      "targets": [
+        { "x": 550, "y": 520 },
+        { "x": 650, "y": 460 },
+        { "x": 550, "y": 400 },
+        { "x": 700, "y": 340 }
+      ],
+      "obstacles": [
+        { "x": 400, "y": 520, "width": 100, "height": 20, "angle": 0.39269908169872414 },
+        { "x": 500, "y": 440, "width": 100, "height": 20, "angle": -0.39269908169872414 },
+        { "x": 600, "y": 380, "width": 100, "height": 20, "angle": 0.39269908169872414 }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "The Fortress",
+      "targets": [
+        { "x": 700, "y": 540 },
+        { "x": 720, "y": 480 },
+        { "x": 700, "y": 420 }
+      ],
+      "obstacles": [
+        { "x": 500, "y": 550, "width": 200, "height": 20, "angle": 0 },
+        { "x": 600, "y": 480, "width": 80, "height": 20, "angle": 1.5707963267948966 },
+        { "x": 550, "y": 400, "width": 120, "height": 20, "angle": 0.5235987755982988 }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Stairway",
+      "targets": [
+        { "x": 500, "y": 540 },
+        { "x": 580, "y": 480 },
+        { "x": 660, "y": 420 },
+        { "x": 740, "y": 360 }
+      ],
+      "obstacles": [
+        { "x": 450, "y": 520, "width": 80, "height": 15, "angle": 0 },
+        { "x": 530, "y": 460, "width": 80, "height": 15, "angle": 0 },
+        { "x": 610, "y": 400, "width": 80, "height": 15, "angle": 0 },
+        { "x": 690, "y": 340, "width": 80, "height": 15, "angle": 0 }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "The Gauntlet",
+      "targets": [
+        { "x": 600, "y": 540 },
+        { "x": 650, "y": 480 },
+        { "x": 700, "y": 420 },
+        { "x": 750, "y": 360 },
+        { "x": 720, "y": 300 }
+      ],
+      "obstacles": [
+        { "x": 400, "y": 540, "width": 140, "height": 20, "angle": 0.2617993877991494 },
+        { "x": 500, "y": 470, "width": 120, "height": 20, "angle": -0.2617993877991494 },
+        { "x": 600, "y": 400, "width": 100, "height": 20, "angle": 0.39269908169872414 },
+        { "x": 650, "y": 320, "width": 120, "height": 20, "angle": -0.5235987755982988 }
+      ]
+    }
+  ],
+  "proceduralGeneration": {
+    "enabled": true,
+    "startAfterLevel": 8,
+    "targetCount": { "min": 3, "max": 6 },
+    "obstacleCount": { "min": 2, "max": 5 },
+    "targetSpawnArea": {
+      "minX": 500,
+      "maxX": 780,
+      "minY": 300,
+      "maxY": 560
+    },
+    "obstacleSpawnArea": {
+      "minX": 300,
+      "maxX": 700,
+      "minY": 350,
+      "maxY": 560
+    },
+    "obstacleSize": {
+      "minWidth": 80,
+      "maxWidth": 160,
+      "height": 20
+    },
+    "obstacleAngleRange": {
+      "min": -0.7853981633974483,
+      "max": 0.7853981633974483
+    }
+  }
+}

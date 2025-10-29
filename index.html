@@ -2,485 +2,118 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Physics Playground - A fun physics-based puzzle game built with Matter.js" />
+    <meta name="theme-color" content="#eef" />
     <title>Physics Playground</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <style>
-      html,
-      body {
-        margin: 0;
-        overflow: hidden;
-        background: #eef;
-        font-family: system-ui, sans-serif;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-      #controls {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-        margin: 6px;
-      }
-      canvas {
-        background: #cde;
-        border: 1px solid #888;
-        touch-action: none;
-        max-width: 100%;
-        height: auto;
-      }
-      .stat {
-        font-weight: 600;
-        margin-left: 8px;
-      }
-      #overlay {
-        position: absolute;
-        top: 45%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.7);
-        color: #fff;
-        padding: 16px 24px;
-        border-radius: 8px;
-        font-size: 1.2em;
-        text-align: center;
-        display: none;
-      }
-    </style>
+
+    <!-- External CSS -->
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="controls">
-      <button id="resetBtn">Reset</button>
-      <span id="levelDisplay" class="stat">Level: 1</span>
-      <span id="scoreDisplay" class="stat">Score: 0</span>
-      <span id="triesDisplay" class="stat">Tries Left: 0</span>
-      <span id="highScoreDisplay" class="stat">High Score: 0</span>
-    </div>
+    <!-- Main game container -->
+    <main id="gameContainer">
+      <!-- Controls -->
+      <div id="controls" role="toolbar" aria-label="Game controls">
+        <button id="resetBtn" type="button" aria-label="Reset game">Reset</button>
+        <button id="soundToggleBtn" type="button" aria-label="Toggle sound">Sound: On</button>
+        <span id="levelDisplay" class="stat" role="status" aria-live="polite">Level: 1</span>
+        <span id="scoreDisplay" class="stat" role="status" aria-live="polite">Score: 0</span>
+        <span id="triesDisplay" class="stat" role="status" aria-live="polite">Tries Left: 0</span>
+        <span id="highScoreDisplay" class="stat" role="status">High Score: 0</span>
+      </div>
 
-    <canvas id="game" width="800" height="600"></canvas>
-    <div id="overlay"></div>
+      <!-- Game canvas -->
+      <canvas
+        id="game"
+        width="800"
+        height="600"
+        aria-label="Physics playground game canvas"
+        role="application"
+      >
+        Your browser does not support the canvas element. Please use a modern browser.
+      </canvas>
 
-    <script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
+      <!-- Keyboard controls help text (screen reader only) -->
+      <div class="sr-only" role="region" aria-label="Keyboard controls">
+        <h2>Keyboard Controls</h2>
+        <ul>
+          <li>Arrow keys or WASD: Aim projectile (Up/Down for angle, Left/Right for power)</li>
+          <li>Space or Enter: Launch projectile</li>
+          <li>P or Escape: Pause/Resume game</li>
+          <li>R: Reset game</li>
+          <li>M: Toggle sound</li>
+        </ul>
+      </div>
+    </main>
+
+    <!-- Overlay for messages -->
+    <div id="overlay" role="alert" aria-live="assertive"></div>
+
+    <!-- Matter.js physics engine with SRI -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"
+      integrity="sha256-WMXMGRz1/WEO8SWI6VgG8Kc3LvLZVEhPo7LCh6/FsNI="
+      crossorigin="anonymous"
+    ></script>
+
+    <!-- Game modules -->
+    <script src="config.js"></script>
+    <script src="AudioManager.js"></script>
+    <script src="ParticleSystem.js"></script>
+    <script src="LevelManager.js"></script>
+    <script src="InputHandler.js"></script>
+    <script src="game.js"></script>
+
+    <!-- Game initialization -->
     <script>
-      const { Engine, Runner, Bodies, Body, Composite, Events } = Matter;
-      const canvas = document.getElementById("game"),
-        ctx = canvas.getContext("2d");
-      const engine = Engine.create(),
-        world = engine.world;
-      const runner = Runner.create();
-      Runner.run(runner, engine);
+      'use strict';
 
-      const launcherPos = { x: 100, y: 550 },
-        VELOCITY_SCALE = 0.25; // reduced for better control
-      const ground = Bodies.rectangle(400, 590, 800, 20, { isStatic: true });
-      const walls = [
-        Bodies.rectangle(0, 300, 20, 600, { isStatic: true }),
-        Bodies.rectangle(800, 300, 20, 600, { isStatic: true }),
-      ];
-      Composite.add(world, [ground, ...walls]);
-
-      const resetBtn = document.getElementById("resetBtn");
-      const levelDisplay = document.getElementById("levelDisplay");
-      const scoreDisplay = document.getElementById("scoreDisplay");
-      const triesDisplay = document.getElementById("triesDisplay");
-      const highScoreDisplay = document.getElementById("highScoreDisplay");
-      const overlay = document.getElementById("overlay");
-
-      function playSound(f, t = "sine", d = 0.2, v = 0.2) {
-        const ac = new (window.AudioContext || window.webkitAudioContext)();
-        const o = ac.createOscillator(),
-          g = ac.createGain();
-        o.frequency.value = f;
-        o.type = t;
-        g.gain.value = v;
-        o.connect(g);
-        g.connect(ac.destination);
-        o.start();
-        o.stop(ac.currentTime + d);
-      }
-
-      let level = 1,
-        score = 0,
-        highScore = parseInt(
-          localStorage.getItem("physicsPlaygroundHighScore") || "0"
-        );
-      let projectile = null,
-        launched = false,
-        triesLeft = 0,
-        targets = [],
-        obstacles = [];
-      let particles = [],
-        predictedPath = [],
-        clouds = [];
-      highScoreDisplay.textContent = `High Score: ${highScore}`;
-
-      const cloudImg = new Image();
-      cloudImg.src = "assets/cloud.png";
-
-      const BG_COLORS = [
-        { sky: "#bce0ff", ground: "#7bc96f" },
-        { sky: "#ffe6b3", ground: "#c49d56" },
-        { sky: "#ffc6d1", ground: "#c06c84" },
-      ];
-
-      function initClouds() {
-        clouds = [];
-        for (let i = 0; i < 8; i++) {
-          clouds.push({
-            x: Math.random() * 800,
-            y: Math.random() * 150,
-            s: 40 + Math.random() * 60,
-            spd: 0.2 + Math.random() * 0.3,
-            layer: i < 4 ? 1 : 2,
-          });
-        }
-      }
-
-      const LEVELS = [
-        {
-          targets: [
-            { x: 600, y: 540 },
-            { x: 650, y: 480 },
-            { x: 700, y: 420 },
-          ],
-          obstacles: [
-            { x: 400, y: 530, w: 100, h: 20, angle: 0 },
-            { x: 500, y: 460, w: 120, h: 20, angle: Math.PI / 8 },
-          ],
-        },
-        {
-          targets: [
-            { x: 600, y: 500 },
-            { x: 680, y: 450 },
-            { x: 730, y: 400 },
-          ],
-          obstacles: [
-            { x: 430, y: 520, w: 140, h: 20, angle: -Math.PI / 10 },
-            { x: 500, y: 470, w: 100, h: 20, angle: Math.PI / 6 },
-          ],
-        },
-        {
-          targets: [
-            { x: 650, y: 520 },
-            { x: 700, y: 460 },
-            { x: 750, y: 400 },
-          ],
-          obstacles: [
-            { x: 420, y: 530, w: 120, h: 20, angle: Math.PI / 8 },
-            { x: 550, y: 460, w: 150, h: 20, angle: -Math.PI / 8 },
-          ],
-        },
-      ];
-
-      function buildLevel(n) {
-        Composite.clear(world, false);
-        Composite.add(world, [ground, ...walls]);
-        targets = [];
-        obstacles = [];
-        const def = LEVELS[(n - 1) % LEVELS.length];
-        def.targets.forEach((t) =>
-          targets.push(
-            Bodies.circle(t.x, t.y, 20, { isStatic: true, label: "target" })
-          )
-        );
-        def.obstacles.forEach((o) =>
-          obstacles.push(
-            Bodies.rectangle(o.x, o.y, o.w, o.h, {
-              isStatic: true,
-              angle: o.angle,
-              label: "obstacle",
-            })
-          )
-        );
-        Composite.add(world, [...targets, ...obstacles]);
-        triesLeft = targets.length;
-        triesDisplay.textContent = `Tries Left: ${triesLeft}`;
-        levelDisplay.textContent = `Level: ${level}`;
-        launched = false;
-        projectile = null;
-        updatePredictedPath();
-      }
-
-      function computePredictedPath(aDeg, power) {
-        const temp = Engine.create();
-        temp.gravity.y = engine.gravity.y;
-        const ball = Bodies.circle(launcherPos.x, launcherPos.y, 12, {
-          restitution: 0.6,
-          frictionAir: 0.01,
-        });
-        Composite.add(temp.world, ball);
-        const a = (aDeg * Math.PI) / 180,
-          v0 = power * VELOCITY_SCALE;
-        Body.setVelocity(ball, { x: v0 * Math.cos(a), y: -v0 * Math.sin(a) });
-        const pts = [];
-        for (let i = 0; i < 300; i++) {
-          Engine.update(temp, 1000 / 60);
-          pts.push({ x: ball.position.x, y: ball.position.y });
-          if (ball.position.y > 620 || ball.position.x > 820) break;
-        }
-        return pts;
-      }
-      function updatePredictedPath(a = 45, p = 50) {
-        predictedPath = computePredictedPath(a, p);
-      }
-
-      function drawPredictedPath() {
-        if (!predictedPath.length) return;
-        ctx.beginPath();
-        predictedPath.forEach((p, i) =>
-          i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)
-        );
-        ctx.strokeStyle = "rgba(0,0,0,0.4)";
-        ctx.setLineDash([6, 6]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-      function launch(aDeg, power) {
-        if (launched || triesLeft <= 0) return;
-        launched = true;
-        triesLeft--;
-        triesDisplay.textContent = `Tries Left: ${triesLeft}`;
-        const a = (aDeg * Math.PI) / 180,
-          v0 = power * VELOCITY_SCALE;
-        projectile = Bodies.circle(launcherPos.x, launcherPos.y, 12, {
-          restitution: 0.6,
-          frictionAir: 0.01,
-          label: "projectile",
-        });
-        Composite.add(world, projectile);
-        Body.setVelocity(projectile, {
-          x: v0 * Math.cos(a),
-          y: -v0 * Math.sin(a),
-        });
-        predictedPath = [];
-        playSound(220, "triangle", 0.2, 0.3);
-        monitorProjectile();
-      }
-
-      function monitorProjectile() {
-        const t = setInterval(() => {
-          if (!projectile) {
-            clearInterval(t);
-            return;
-          }
-          const v = projectile.velocity;
-          if (Math.hypot(v.x, v.y) < 0.2 || projectile.position.y > 580) {
-            Composite.remove(world, projectile);
-            projectile = null;
-            launched = false;
-            clearInterval(t);
-            checkEndConditions();
-          }
-        }, 500);
-      }
-
-      function spawnExplosion(x, y, color = "#f22") {
-        for (let i = 0; i < 18; i++) {
-          particles.push({
-            x,
-            y,
-            vx: (Math.random() - 0.5) * 6,
-            vy: (Math.random() - 0.5) * 6,
-            life: 60,
-            color,
-          });
-        }
-      }
-      function updateParticles() {
-        particles.forEach((p) => {
-          p.x += p.vx;
-          p.y += p.vy;
-          p.vy += 0.15;
-          p.life--;
-        });
-        particles = particles.filter((p) => p.life > 0);
-      }
-      function drawParticles() {
-        particles.forEach((p) => {
-          ctx.globalAlpha = Math.max(0, p.life / 60);
-          ctx.fillStyle = p.color;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        });
-      }
-
-      function checkEndConditions() {
-        const remaining = Composite.allBodies(world).filter(
-          (b) => b.label === "target"
-        );
-        if (remaining.length === 0) {
-          if (level < LEVELS.length) {
-            nextLevel();
-          } else {
-            showWinScreen();
-          }
+      // Initialize game when DOM is ready
+      (function initGame() {
+        // Check for required APIs
+        if (!window.Matter) {
+          document.getElementById('overlay').innerHTML =
+            'Error: Matter.js failed to load<br><small>Please check your connection and refresh</small>';
+          document.getElementById('overlay').style.display = 'block';
           return;
         }
-        if (triesLeft <= 0) {
-          overlay.innerHTML =
-            "Out of tries!<br><small>Restarting level...</small>";
-          overlay.style.display = "block";
-          setTimeout(() => {
-            overlay.style.display = "none";
-            buildLevel(level);
-          }, 2000);
-        }
-      }
-      function nextLevel() {
-        overlay.innerHTML = `Level ${level} Complete!<br><small>Next loading...</small>`;
-        overlay.style.display = "block";
-        score += 3;
-        playSound(600, "sine", 0.3, 0.3);
-        if (score > highScore) {
-          highScore = score;
-          localStorage.setItem("physicsPlaygroundHighScore", highScore);
-        }
-        scoreDisplay.textContent = `Score: ${score}`;
-        highScoreDisplay.textContent = `High Score: ${highScore}`;
-        setTimeout(() => {
-          overlay.style.display = "none";
-          level++;
-          buildLevel(level);
-        }, 2000);
-      }
-      function showWinScreen() {
-        overlay.innerHTML = `🎉 YOU WIN! 🎉<br>Score: ${score}<br><small>Restarting...</small>`;
-        overlay.style.display = "block";
-        playSound(880, "square", 0.5, 0.4);
-        setTimeout(() => {
-          overlay.style.display = "none";
-          resetGame();
-        }, 3500);
-      }
-      function resetGame() {
-        level = 1;
-        score = 0;
-        buildLevel(level);
-        scoreDisplay.textContent = `Score: ${score}`;
-        overlay.style.display = "none";
-      }
 
-      resetBtn.onclick = resetGame;
-      Events.on(engine, "collisionStart", (e) => {
-        e.pairs.forEach((p) => {
-          const a = p.bodyA,
-            b = p.bodyB;
-          if (
-            (a.label === "projectile" && b.label === "target") ||
-            (b.label === "projectile" && a.label === "target")
-          ) {
-            const t = a.label === "target" ? a : b;
-            spawnExplosion(t.position.x, t.position.y);
-            playSound(440, "square", 0.2, 0.3);
-            Composite.remove(world, t);
-            score++;
-            scoreDisplay.textContent = `Score: ${score}`;
+        // Get canvas element
+        const canvas = document.getElementById('game');
+        if (!canvas || !canvas.getContext) {
+          document.getElementById('overlay').innerHTML =
+            'Error: Canvas not supported<br><small>Please use a modern browser</small>';
+          document.getElementById('overlay').style.display = 'block';
+          return;
+        }
+
+        // Create and initialize game
+        const game = new PhysicsPlayground(canvas);
+        game.initialize().catch(error => {
+          console.error('Game initialization failed:', error);
+          document.getElementById('overlay').innerHTML =
+            `Error: ${error.message}<br><small>Please refresh the page</small>`;
+          document.getElementById('overlay').style.display = 'block';
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+          game.dispose();
+        });
+
+        // Handle visibility change (pause when tab is hidden)
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden && game.gameState === 'playing') {
+            game.pause();
           }
         });
-      });
 
-      // Drag-to-aim control
-      let isDragging = false,
-        startPoint = null,
-        dragAngle = 45,
-        dragPower = 50;
-      canvas.addEventListener("mousedown", (e) => {
-        if (launched) return;
-        isDragging = true;
-        startPoint = { x: e.offsetX, y: e.offsetY };
-      });
-      canvas.addEventListener("mousemove", (e) => {
-        if (!isDragging) return;
-        const dx = e.offsetX - launcherPos.x,
-          dy = launcherPos.y - e.offsetY;
-        dragAngle = Math.min(
-          80,
-          Math.max(10, (Math.atan2(dy, dx) * 180) / Math.PI)
-        );
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        // power curve: smoother response, limits exaggerated power
-        dragPower = Math.min(100, Math.pow(dist / 4, 0.85));
-        updatePredictedPath(dragAngle, dragPower);
-      });
-      canvas.addEventListener("mouseup", () => {
-        if (!isDragging) return;
-        isDragging = false;
-        launch(dragAngle, dragPower);
-      });
-
-      function drawBackground() {
-        const colors = BG_COLORS[(level - 1) % BG_COLORS.length];
-        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        grad.addColorStop(0, colors.sky);
-        grad.addColorStop(1, colors.ground);
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        clouds.forEach((c) => {
-          if (cloudImg.complete) {
-            ctx.globalAlpha = c.layer === 1 ? 0.9 : 0.6;
-            ctx.drawImage(cloudImg, c.x, c.y, c.s * 2, c.s);
-            ctx.globalAlpha = 1;
-          }
-          c.x += c.spd / (c.layer === 1 ? 1 : 2);
-          if (c.x > 850) c.x = -100;
-        });
-      }
-
-      function draw() {
-        drawBackground();
-        if (!launched && !isDragging) drawPredictedPath();
-        ctx.fillStyle = "#444";
-        ctx.fillRect(launcherPos.x - 10, launcherPos.y, 20, 20);
-        if (isDragging) {
-          ctx.beginPath();
-          ctx.moveTo(launcherPos.x, launcherPos.y);
-          const a = (dragAngle * Math.PI) / 180,
-            len = dragPower * 2;
-          ctx.lineTo(
-            launcherPos.x + Math.cos(a) * len,
-            launcherPos.y - Math.sin(a) * len
-          );
-          ctx.strokeStyle = "rgba(0,0,0,0.6)";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(launcherPos.x, launcherPos.y, dragPower / 3, 0, Math.PI * 2);
-          ctx.strokeStyle = "rgba(0,0,0,0.2)";
-          ctx.stroke();
+        // Make game accessible globally for debugging
+        if (typeof window !== 'undefined') {
+          window.game = game;
         }
-        const bodies = Composite.allBodies(world);
-        ctx.beginPath();
-        bodies.forEach((b) => {
-          const v = b.vertices;
-          ctx.moveTo(v[0].x, v[0].y);
-          for (let j = 1; j < v.length; j++) ctx.lineTo(v[j].x, v[j].y);
-          ctx.lineTo(v[0].x, v[0].y);
-        });
-        ctx.strokeStyle = "#000";
-        ctx.stroke();
-        if (projectile) {
-          ctx.beginPath();
-          ctx.arc(
-            projectile.position.x,
-            projectile.position.y,
-            12,
-            0,
-            Math.PI * 2
-          );
-          ctx.fillStyle = "#a22";
-          ctx.fill();
-        }
-        updateParticles();
-        drawParticles();
-        requestAnimationFrame(draw);
-      }
-
-      initClouds();
-      buildLevel(level);
-      draw();
+      })();
     </script>
   </body>
 </html>
